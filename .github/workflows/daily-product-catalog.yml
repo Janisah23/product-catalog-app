@@ -17,7 +17,7 @@ concurrency:
 jobs:
   ai-review:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Checkout repository
@@ -30,7 +30,7 @@ jobs:
         with:
           node-version: 22
 
-      - name: Generate daily Gemini review
+      - name: Generate a dated Gemini review
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
@@ -75,13 +75,10 @@ jobs:
 
                 if (attempt === retries) break;
 
-                const delay = Math.min(2000 * (2 ** attempt), 20000);
+                const delay = Math.min(3000 * (2 ** attempt), 20000);
                 const jitter = Math.floor(Math.random() * 1000);
 
-                console.log(
-                  `Temporary error. Retrying in ${delay + jitter} ms.`
-                );
-
+                console.log(`Retrying in ${delay + jitter} ms.`);
                 await sleep(delay + jitter);
               }
             }
@@ -93,21 +90,17 @@ jobs:
             const apiKey = process.env.GEMINI_API_KEY;
 
             if (!apiKey) {
-              throw new Error("GEMINI_API_KEY repository secret is missing.");
+              throw new Error("GEMINI_API_KEY secret is missing.");
             }
 
-            console.log("Discovering Gemini models available to this API key.");
-
-            const modelResponse = await request(
+            const listing = await request(
               "https://generativelanguage.googleapis.com/v1beta/models",
               {
-                headers: {
-                  "x-goog-api-key": apiKey
-                }
+                headers: { "x-goog-api-key": apiKey }
               }
             );
 
-            const models = (modelResponse.data?.models || [])
+            const models = (listing.data?.models || [])
               .filter(model =>
                 model.supportedGenerationMethods?.includes("generateContent") &&
                 /flash/i.test(model.name) &&
@@ -118,27 +111,23 @@ jobs:
                   name.includes("gemini-3.8-flash") ? 0 :
                   name.includes("gemini-3.6-flash") ? 1 :
                   name.includes("gemini-3.5-flash") ? 2 : 3;
-
                 return rank(a.name) - rank(b.name);
               });
 
             if (!models.length) {
-              throw new Error(
-                "No eligible Flash models were found for this API key."
-              );
+              throw new Error("No eligible Flash models are available.");
             }
 
             const prompt = [
-              "Write a daily review for a student React product catalog project.",
-              "You have not been given its source code, so do not claim to have inspected it.",
-              "Give exactly three practical suggestions about accessibility, usability, testing, or maintainability.",
-              "Avoid repetitive generic advice where possible.",
-              "Use a Markdown heading and a numbered list.",
+              "Write a daily review for a student React + Vite + TypeScript product catalog project.",
+              "You have not been given source files. Do not claim to have inspected the code.",
+              "Give exactly three useful, specific suggestions about accessibility, usability, testing, or maintainability.",
+              "Use a Markdown heading and numbered list.",
               "Keep the report under 180 words."
             ].join("\n");
 
             let review = "";
-            let lastModelError = "";
+            let lastError = "";
 
             for (const model of models) {
               console.log(`Trying model: ${model.name}`);
@@ -156,20 +145,18 @@ jobs:
                       contents: [{ parts: [{ text: prompt }] }],
                       generationConfig: {
                         maxOutputTokens: 500,
-                        temperature: 0.3
+                        temperature: 0.4
                       }
                     })
                   }
                 );
 
                 if (result.unavailable) {
-                  console.log(`${model.name} returned 404; trying next model.`);
+                  console.log("Model unavailable; trying the next model.");
                   continue;
                 }
 
-                const candidate = result.data.candidates?.[0];
-
-                review = candidate?.content?.parts
+                review = result.data.candidates?.[0]?.content?.parts
                   ?.map(part => part.text || "")
                   .join("")
                   .trim() || "";
@@ -178,18 +165,15 @@ jobs:
                   console.log(`Review generated using ${model.name}.`);
                   break;
                 }
-
-                lastModelError = `${model.name} returned empty output.`;
-                console.log(lastModelError);
               } catch (error) {
-                lastModelError = `${model.name}: ${error.message}`;
-                console.error(lastModelError);
+                lastError = error.message;
+                console.error(`${model.name}: ${lastError}`);
               }
             }
 
             if (!review) {
               throw new Error(
-                `All eligible models failed. No report was written. ${lastModelError}`
+                `No model generated a review. ${lastError}`
               );
             }
 
@@ -202,15 +186,16 @@ jobs:
               day: "2-digit"
             }).format(new Date());
 
-            await fs.mkdir("reports", { recursive: true });
+            const filePath = `reports/${date}.md`;
 
+            await fs.mkdir("reports", { recursive: true });
             await fs.writeFile(
-              "reports/daily-review.md",
+              filePath,
               `# Daily Product Catalog Review\n\nDate: ${date}\n\n${review}\n`,
               "utf8"
             );
 
-            console.log("Saved reports/daily-review.md");
+            console.log(`Saved ${filePath}`);
           }
 
           main().catch(error => {
@@ -219,7 +204,7 @@ jobs:
           });
           NODE
 
-      - name: Commit and push daily review
+      - name: Commit and push daily report
         env:
           GH_EMAIL: ${{ secrets.COMMIT_AUTHOR_EMAIL }}
           GH_NAME: ${{ secrets.COMMIT_AUTHOR_NAME }}
@@ -229,12 +214,12 @@ jobs:
           git config user.name "${GH_NAME:-github-actions[bot]}"
           git config user.email "${GH_EMAIL:-41898282+github-actions[bot]@users.noreply.github.com}"
 
-          git add reports/daily-review.md
+          git add reports/
 
           if git diff --cached --quiet; then
-            echo "The report has not changed. Skipping commit."
+            echo "No new report was created; skipping commit."
             exit 0
           fi
 
-          git commit -m "docs: add daily AI product catalog review"
+          git commit -m "docs: add daily product catalog review"
           git push origin HEAD:main
