@@ -62,11 +62,13 @@ export default function App() {
       <BrowserRouter>
         <AuthBootstrap />
         <Routes>
+            {/* No navbar */}
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
+
           <Route element={<Layout />}>
             <Route index element={<CatalogPage />} />
             <Route path="product/:id" element={<ProductPage />} />
-            <Route path="login" element={<LoginPage />} />
-            <Route path="register" element={<RegisterPage />} />
             <Route element={<ProtectedRoute />}>
               <Route path="cart" element={<CartPage />} />
             </Route>

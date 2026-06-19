@@ -43,7 +43,18 @@ export default function LoginPage() {
   }
 
   return (
-    <AuthShell title="Log in" intro="Welcome back. Your cart is saved to your account." footer={<>New to Forme? <Link to="/register" state={location.state} className="text-foreground underline underline-offset-4">Create an account</Link></>}>
+    <AuthShell
+      title="Login"
+      intro="Welcome back. Your cart is saved to your account."
+      footer={
+        <>
+          Don't have any account?{" "}
+          <Link to="/register" state={location.state} className="font-medium underline underline-offset-4">
+            Sign Up
+          </Link>
+        </>
+      }
+    >
       <form onSubmit={onSubmit} noValidate className="space-y-5">
         <Field id="email" label="Email" type="email" value={email} onChange={setEmail} error={errors.email} autoComplete="email" />
         <Field id="password" label="Password" type="password" value={password} onChange={setPassword} error={errors.password} autoComplete="current-password" />
@@ -52,8 +63,13 @@ export default function LoginPage() {
             {errors.form}
           </p>
         )}
-        <Button type="submit" size="lg" className="w-full" disabled={submitting}>
-          {submitting ? "Logging in…" : "Log in"}
+        <Button
+          type="submit"
+          size="lg"
+          disabled={submitting}
+          className="h-14 w-full rounded-xl bg-black text-white hover:bg-black/90"
+        >
+          {submitting ? "Logging in…" : "Login"}
         </Button>
       </form>
     </AuthShell>
