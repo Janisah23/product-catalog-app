@@ -1,0 +1,20 @@
+
+name: Daily AI Product Catalog Improvement
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 9 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  test-workflow:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout product catalog app
+        uses: actions/checkout@v4
+
+      - name: Confirm workflow works
+        run: echo "Product catalog workflow YAML is valid."
