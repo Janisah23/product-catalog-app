@@ -1,0 +1,304 @@
+```yaml
+name: Daily AI Product Catalog Improvement
+
+on:
+  schedule:
+    # Runs every day at 5:00 PM Philippines time (09:00 UTC)
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  improve-product-catalog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prepare AI branch
+        run: |
+          git fetch origin ai-daily-updates || true
+          if git show-ref --verify --quiet refs/remotes/origin/ai-daily-updates; then
+            git checkout -B ai-daily-updates origin/ai-daily-updates
+          else
+            git checkout -b ai-daily-updates
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Generate and validate an improvement
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          cat > /tmp/daily_ai.py <<'PY'
+          import os
+          import json
+          import subprocess
+          import urllib.request
+          import urllib.error
+          from pathlib import Path
+
+          def run(args, check=True):
+              return subprocess.run(
+                  args, check=check, text=True, capture_output=True
+              )
+
+          # Read a limited set of tracked project files.
+          names = run(["git", "ls-files"]).stdout.splitlines()
+          allowed = (
+              ".js", ".jsx", ".ts", ".tsx", ".css",
+              ".html", ".json", ".md"
+          )
+          ignored = (
+              "package-lock.json",
+              "yarn.lock",
+              "pnpm-lock.yaml"
+          )
+
+          files = []
+          total = 0
+
+          for name in names:
+              p = Path(name)
+
+              if (
+                  not name.endswith(allowed)
+                  or p.name in ignored
+                  or any(
+                      x in p.parts
+                      for x in [
+                          "node_modules", "dist",
+                          "build", ".git"
+                      ]
+                  )
+                  or p.name.startswith(".env")
+                  or name.startswith(".github/workflows/")
+              ):
+                  continue
+
+              try:
+                  content = p.read_text(encoding="utf-8")
+              except (UnicodeError, OSError):
+                  continue
+
+              if len(content) > 6000:
+                  content = content[:6000]
+
+              if total + len(content) > 24000:
+                  break
+
+              files.append(
+                  f"\n--- FILE: {name} ---\n{content}"
+              )
+              total += len(content)
+
+          if not files:
+              raise SystemExit(
+                  "No suitable product catalog project files found."
+              )
+
+          prompt = """
+          You are improving a student-built product catalog application.
+
+          Make ONE small, useful, safe improvement that fits the existing
+          project, framework, and visual design.
+
+          Prioritize:
+          - Product cards with clear images, names, prices, and details
+          - Product search and relevant category filters
+          - Sorting products by price, name, or other existing fields
+          - Product detail views and navigation
+          - Responsive product grids for desktop and mobile
+          - Empty search results and helpful user feedback
+          - Accessible controls, readable text, and consistent spacing
+          - Correct product data rendering and error handling
+          - Fixing an obvious bug or improving maintainability
+
+          Rules:
+          - Respect the existing framework and coding conventions.
+          - Use existing product data and available functionality.
+          - Do not invent backend APIs, services, or product information.
+          - Do not change dependencies, lockfiles, secrets, deployment
+            settings, or GitHub workflows.
+          - Never remove existing functionality.
+          - Do not introduce checkout, payment, authentication, or other
+            backend-dependent features unless already implemented.
+          - Modify existing files only.
+          - If no clearly worthwhile improvement exists, return NO_CHANGE.
+
+          Otherwise, return ONLY a valid unified git diff with standard
+          'diff --git' headers. Do not use Markdown fences or explanations.
+
+          PROJECT FILES:
+          """ + "".join(files)
+
+          key = os.environ.get("GEMINI_API_KEY")
+          if not key:
+              raise SystemExit("GEMINI_API_KEY secret is missing.")
+
+          url = (
+              "https://generativelanguage.googleapis.com/v1beta/"
+              "models/gemini-2.5-flash:generateContent?key=" + key
+          )
+
+          body = {
+              "contents": [
+                  {"parts": [{"text": prompt}]}
+              ],
+              "generationConfig": {
+                  "temperature": 0.2,
+                  "maxOutputTokens": 6000
+              }
+          }
+
+          req = urllib.request.Request(
+              url,
+              data=json.dumps(body).encode(),
+              headers={"Content-Type": "application/json"},
+              method="POST"
+          )
+
+          try:
+              with urllib.request.urlopen(req, timeout=90) as response:
+                  result = json.loads(response.read())
+          except urllib.error.HTTPError as e:
+              raise SystemExit(
+                  f"Gemini API request failed with HTTP {e.code}. "
+                  "Check the API key, model availability, and quota."
+              )
+          except urllib.error.URLError as e:
+              raise SystemExit(f"Gemini API connection failed: {e}")
+
+          candidates = result.get("candidates", [])
+          if not candidates:
+              raise SystemExit("Gemini returned no usable response.")
+
+          patch = "".join(
+              part.get("text", "")
+              for part in candidates[0]["content"].get("parts", [])
+          ).strip()
+
+          if patch == "NO_CHANGE":
+              print("No worthwhile change today.")
+              raise SystemExit(0)
+
+          if patch.startswith("```"):
+              raise SystemExit(
+                  "Unexpected fenced output; refusing to apply."
+              )
+
+          if not patch.startswith("diff --git "):
+              raise SystemExit("Response is not a valid git diff.")
+
+          # Restrict patches to existing tracked files.
+          changed_paths = set()
+          current_file = None
+
+          for line in patch.splitlines():
+              if line.startswith("diff --git "):
+                  parts = line.split()
+                  if len(parts) != 4:
+                      raise SystemExit("Malformed diff header.")
+                  old_path = parts[2][2:]
+                  new_path = parts[3][2:]
+
+                  if old_path != new_path:
+                      raise SystemExit(
+                          "Refusing file creation, deletion, or rename."
+                      )
+
+                  current_file = new_path
+                  changed_paths.add(current_file)
+
+              if line.startswith(("+++ ", "--- ")):
+                  path = line[4:].split("\t")[0]
+
+                  if path == "/dev/null" or path.startswith("/"):
+                      raise SystemExit(
+                          "Refusing file creation or deletion."
+                      )
+
+                  if path.startswith(("a/", "b/")):
+                      path = path[2:]
+
+                  if path.startswith(".github/workflows/"):
+                      raise SystemExit("Refusing workflow edits.")
+
+          tracked = set(names)
+
+          for path in changed_paths:
+              if path not in tracked:
+                  raise SystemExit(
+                      f"Refusing modification of untracked file: {path}"
+                  )
+
+          Path("/tmp/change.patch").write_text(
+              patch + "\n", encoding="utf-8"
+          )
+
+          run(["git", "apply", "--check", "/tmp/change.patch"])
+          run(["git", "apply", "/tmp/change.patch"])
+
+          # Test the project before committing.
+          if Path("package.json").exists():
+              pkg = json.loads(
+                  Path("package.json").read_text(encoding="utf-8")
+              )
+              scripts = pkg.get("scripts", {})
+
+              if Path("package-lock.json").exists():
+                  run(["npm", "ci"])
+              elif Path("yarn.lock").exists():
+                  run(["corepack", "enable"])
+                  run(["yarn", "install", "--immutable"])
+              elif Path("pnpm-lock.yaml").exists():
+                  run(["corepack", "enable"])
+                  run(["pnpm", "install", "--frozen-lockfile"])
+              else:
+                  run(["npm", "install", "--ignore-scripts"])
+
+              if "test" in scripts:
+                  run(["npm", "test", "--", "--run"])
+
+              if "build" in scripts:
+                  run(["npm", "run", "build"])
+
+          if not run(
+              ["git", "diff", "--quiet"], check=False
+          ).returncode:
+              print("No changes to commit.")
+              raise SystemExit(0)
+
+          run([
+              "git", "config", "user.name",
+              "github-actions[bot]"
+          ])
+          run([
+              "git", "config", "user.email",
+              "41898282+github-actions[bot]@users.noreply.github.com"
+          ])
+          run(["git", "add", "-u"])
+
+          run([
+              "git", "commit", "-m",
+              "chore: daily AI product catalog improvement"
+          ])
+
+          run([
+              "git", "push", "origin", "ai-daily-updates"
+          ])
+
+          print("Improvement tested and pushed successfully.")
+          PY
+
+          python /tmp/daily_ai.py
+```
