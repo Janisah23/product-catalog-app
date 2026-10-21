@@ -1,0 +1,3 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 1000" width="800" height="1000"><rect width="800" height="1000" fill="#ECE7DC"/><rect y="780" width="800" height="220" fill="#000" opacity=".05"/><ellipse cx="400" cy="794" rx="230" ry="16" fill="#000" opacity=".12"/><g transform="translate(400 790) scale(1.2)"><rect x="-235" y="-120" width="470" height="120" rx="8" fill="#B58F66"/><rect x="-215" y="-100" width="430" height="80" rx="4" fill="#917252"/>
+    <rect x="-80" y="-100" width="10" height="80" fill="#B58F66"/><rect x="70" y="-100" width="10" height="80" fill="#B58F66"/>
+    <rect x="-190" y="-95" width="14" height="70" rx="7" fill="#2B2C2A" opacity=".85" transform="rotate(8 -183 -60)"/></g></svg>

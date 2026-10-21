@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // All reads and writes go through the Express API (firebase-admin bypasses these rules).
+    // Browsers get no direct access to any collection.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

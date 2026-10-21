@@ -23,3 +23,15 @@ dist-ssr
 *.sln
 *.sw?
 .env
+
+# Environment files (keep the examples)
+.env
+.env.*
+!.env.example
+server/.env
+
+# Firebase service-account keys must never be committed
+serviceAccountKey*.json
+*-firebase-adminsdk-*.json
+
+server/dist

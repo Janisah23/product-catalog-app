@@ -1,68 +1,80 @@
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { useEffect } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { onAuthStateChanged } from "firebase/auth";
+import { Layout } from "@/components/layout/Layout";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { Toaster } from "@/components/Toaster";
+import { ApiError, api } from "@/lib/api";
+import { auth, isFirebaseConfigured } from "@/lib/firebase";
+import { useAuthStore } from "@/stores/auth-store";
+import CartPage from "@/pages/CartPage";
+import CatalogPage from "@/pages/CatalogPage";
+import LoginPage from "@/pages/LoginPage";
+import NotFoundPage from "@/pages/NotFoundPage";
+import ProductPage from "@/pages/ProductPage";
+import RegisterPage from "@/pages/RegisterPage";
 
-function App() {
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      refetchOnWindowFocus: false,
+      retry: (failures, error) => !(error instanceof ApiError && error.status >= 400 && error.status < 500) && failures < 2,
+    },
+  },
+});
+
+/** Mirrors Firebase's signed-in user into the Zustand store and clears cached cart data on logout. */
+function AuthBootstrap() {
+  const setUser = useAuthStore((s) => s.setUser);
+  useEffect(
+    () =>
+      onAuthStateChanged(auth, (fb) => {
+        if (fb) {
+          setUser({ uid: fb.uid, email: fb.email, displayName: fb.displayName });
+          api.get("/me", { auth: true }).catch(() => undefined); // server verifies the token and syncs the profile
+        } else {
+          setUser(null);
+          queryClient.removeQueries({ queryKey: ["cart"] });
+        }
+      }),
+    [setUser],
+  );
+  return null;
+}
+
+function SetupNotice() {
   return (
-    <main className="min-h-screen bg-white px-6 py-12 text-black">
-      <div className="mx-auto max-w-6xl">
-        <div className="mb-10">
-          <p className="mb-2 text-sm text-gray-500">
-            PRODUCT CATALOG
-          </p>
-
-          <h1 className="text-4xl font-bold tracking-tight">
-            Shop Products
-          </h1>
-
-          <p className="mt-3 max-w-2xl text-gray-500">
-            Browse our product catalog and find what you need.
-          </p>
-        </div>
-
-        <div className="mb-8 flex gap-3">
-          <Input
-            placeholder="Search products..."
-            className="max-w-md"
-          />
-
-          <Button>
-            Search
-          </Button>
-        </div>
-
-        <Card className="max-w-sm">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Sample Product</CardTitle>
-              <Badge>Available</Badge>
-            </div>
-
-            <CardDescription>
-              A sample product card for our catalog.
-            </CardDescription>
-          </CardHeader>
-
-          <CardContent>
-            <p className="mb-4 text-2xl font-bold">
-              $49.99
-            </p>
-
-            <Button className="w-full">
-              Add to Cart
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+    <main className="mx-auto max-w-xl px-5 py-24">
+      <h1 className="font-serif text-4xl">Firebase isn't configured yet</h1>
+      <p className="mt-4 text-muted-foreground">
+        Copy <code>.env.example</code> to <code>.env</code>, fill in the <code>VITE_FIREBASE_*</code> values from your Firebase web app settings, then restart <code>npm run dev</code>.
+      </p>
     </main>
   );
 }
 
-export default App;
+export default function App() {
+  if (!isFirebaseConfigured) return <SetupNotice />;
+  return (
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <AuthBootstrap />
+        <Routes>
+          <Route element={<Layout />}>
+            <Route index element={<CatalogPage />} />
+            <Route path="product/:id" element={<ProductPage />} />
+            <Route path="login" element={<LoginPage />} />
+            <Route path="register" element={<RegisterPage />} />
+            <Route element={<ProtectedRoute />}>
+              <Route path="cart" element={<CartPage />} />
+            </Route>
+            <Route path="*" element={<NotFoundPage />} />
+          </Route>
+        </Routes>
+        <Toaster />
+      </BrowserRouter>
+    </QueryClientProvider>
+  );
+}

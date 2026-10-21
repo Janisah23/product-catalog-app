@@ -5,13 +5,18 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "server": "npm run dev -w server",
+    "server:build": "npm run build -w server",
+    "seed": "npm run seed -w server",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "images": "tsx scripts/generate-product-images.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
-    "@fontsource-variable/geist": "^5.3.0",
+    "@fontsource-variable/inter": "^5.2.5",
+    "@fontsource/dm-serif-display": "^5.2.5",
     "@tailwindcss/vite": "^4.3.3",
     "@tanstack/react-query": "^5.102.8",
     "class-variance-authority": "^0.7.1",
@@ -39,5 +44,8 @@
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.67.0",
     "vite": "^8.2.2"
-  }
+  },
+  "workspaces": [
+    "server"
+  ]
 }

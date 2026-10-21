@@ -11,4 +11,10 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  server: {
+    // In development the browser calls /api on the Vite origin and Vite forwards it to Express.
+    proxy: {
+      '/api': 'http://localhost:4000',
+    },
+  },
 })
