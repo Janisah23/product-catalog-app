@@ -4,6 +4,7 @@ name: Daily AI Product Catalog Improvement
 on:
   workflow_dispatch:
   schedule:
+    # 5:00 PM Philippines time (09:00 UTC)
     - cron: "0 9 * * *"
 
 permissions:
