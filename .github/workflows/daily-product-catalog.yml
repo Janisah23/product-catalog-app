@@ -4,17 +4,321 @@ name: Daily AI Product Catalog Improvement
 on:
   workflow_dispatch:
   schedule:
+    # 5:00 PM Philippines time (09:00 UTC)
     - cron: "0 9 * * *"
 
 permissions:
   contents: write
+  pull-requests: write
+
+concurrency:
+  group: daily-product-catalog-ai
+  cancel-in-progress: false
 
 jobs:
-  test-workflow:
+  improve:
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout product catalog app
-        uses: actions/checkout@v4
 
-      - name: Confirm workflow works
-        run: echo "Product catalog workflow YAML is valid."
+    steps:
+      - name: Checkout default branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Configure Git identity
+        env:
+          AUTHOR_NAME: ${{ secrets.GITHUB_AUTHOR_NAME }}
+          AUTHOR_EMAIL: ${{ secrets.GITHUB_AUTHOR_EMAIL }}
+        run: |
+          git config user.name "${AUTHOR_NAME:-github-actions[bot]}"
+          git config user.email "${AUTHOR_EMAIL:-41898282+github-actions[bot]@users.noreply.github.com}"
+
+      - name: Generate and validate AI improvement
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          node <<'NODE'
+          const fs = require("fs");
+          const { execFileSync } = require("child_process");
+
+          async function main() {
+            const apiKey = process.env.GEMINI_API_KEY;
+            if (!apiKey) throw new Error("Missing GEMINI_API_KEY secret.");
+
+            const tracked = execFileSync("git", ["ls-files", "-z"], {
+              encoding: "utf8"
+            }).split("\0").filter(Boolean);
+
+            const allowed = tracked.filter(path =>
+              /^(src|public)\//.test(path) &&
+              /\.(js|jsx|ts|tsx|css|scss|html)$/.test(path) &&
+              !/(^|\/)(node_modules|dist|build|coverage)\//.test(path) &&
+              !path.endsWith(".min.js")
+            );
+
+            const files = [];
+            let total = 0;
+
+            for (const path of allowed) {
+              const content = fs.readFileSync(path, "utf8");
+              if (content.length > 12000 || total + content.length > 45000) continue;
+              files.push({ path, content });
+              total += content.length;
+            }
+
+            if (!files.length) {
+              throw new Error("No suitable tracked source files found under src/ or public/.");
+            }
+
+            const modelsResponse = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`
+            );
+
+            if (!modelsResponse.ok) {
+              throw new Error(`Gemini model lookup failed: HTTP ${modelsResponse.status} ${await modelsResponse.text()}`);
+            }
+
+            const modelData = await modelsResponse.json();
+            const available = (modelData.models || [])
+              .filter(m => (m.supportedGenerationMethods || []).includes("generateContent"))
+              .map(m => m.name.replace(/^models\//, ""));
+
+            const model =
+              ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3-flash"]
+                .find(name => available.includes(name)) ||
+              available.find(name => name.toLowerCase().includes("flash"));
+
+            if (!model) throw new Error("No available Gemini model supports generateContent.");
+
+            const prompt = `
+          You are helping improve an existing React product catalog application.
+          Review the supplied source files and propose ONE small, useful, safe improvement.
+
+          Requirements:
+          - Preserve the existing framework, style, architecture, and conventions.
+          - Focus on product browsing, accessibility, responsive layout, usability,
+            loading/empty/error states, or a small UI polish improvement.
+          - Make only a focused change supported by the supplied source.
+          - Do not invent backend endpoints, product data, credentials, or features.
+          - Do not change dependencies, package manifests, lockfiles, workflows,
+            environment files, Firebase configuration, or server security rules.
+          - Do not remove existing functionality.
+          - Only modify existing files under src/ or public/.
+          - Return a valid unified Git diff, including diff --git, --- and +++ headers.
+          - Do not wrap the diff in Markdown fences or include explanations.
+          - If no safe, worthwhile improvement is possible, return exactly NO_CHANGE.
+
+          Source files:
+          ${files.map(f => `\n--- FILE: ${f.path} ---\n${f.content}`).join("\n")}
+          `;
+
+            const response = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "x-goog-api-key": apiKey
+                },
+                body: JSON.stringify({
+                  contents: [{ parts: [{ text: prompt }] }],
+                  generationConfig: {
+                    temperature: 0.2,
+                    maxOutputTokens: 6000
+                  }
+                })
+              }
+            );
+
+            if (!response.ok) {
+              throw new Error(`Gemini request failed: HTTP ${response.status} ${await response.text()}`);
+            }
+
+            const result = await response.json();
+            let output = (result.candidates?.[0]?.content?.parts || [])
+              .map(part => part.text || "")
+              .join("\n")
+              .trim();
+
+            if (!output) throw new Error("Gemini returned an empty response.");
+
+            if (output === "NO_CHANGE") {
+              console.log("Gemini found no safe improvement today.");
+              fs.writeFileSync("/tmp/no-change", "true");
+              return;
+            }
+
+            output = output
+              .replace(/^```(?:diff|patch)?\s*/i, "")
+              .replace(/\s*```$/, "")
+              .trim();
+
+            const start = output.indexOf("diff --git ");
+            if (start >= 0) output = output.slice(start);
+
+            if (!output.startsWith("diff --git ")) {
+              console.log("Gemini response preview:", output.slice(0, 1500));
+              throw new Error("Gemini did not return a valid unified Git diff.");
+            }
+
+            const patchPath = "/tmp/product-catalog.patch";
+            fs.writeFileSync(patchPath, output + "\n");
+
+            const changedPaths = [
+              ...output.matchAll(/^diff --git a\/(.+?) b\/(.+)$/gm)
+            ].map(match => [match[1], match[2]]);
+
+            if (!changedPaths.length) throw new Error("Patch contains no file changes.");
+
+            for (const [oldPath, newPath] of changedPaths) {
+              if (
+                oldPath !== newPath ||
+                !tracked.includes(oldPath) ||
+                !/^(src|public)\//.test(oldPath) ||
+                !/\.(js|jsx|ts|tsx|css|scss|html)$/.test(oldPath) ||
+                /(^|\/)(node_modules|dist|build|coverage)\//.test(oldPath)
+              ) {
+                throw new Error(`Rejected unsafe or unsupported file change: ${oldPath} -> ${newPath}`);
+              }
+            }
+
+            execFileSync("git", ["apply", "--check", patchPath], { stdio: "inherit" });
+            execFileSync("git", ["apply", patchPath], { stdio: "inherit" });
+
+            const changed = execFileSync("git", ["diff", "--name-only"], {
+              encoding: "utf8"
+            }).trim();
+
+            if (!changed) {
+              console.log("Patch produced no changes.");
+              fs.writeFileSync("/tmp/no-change", "true");
+              return;
+            }
+
+            console.log(`AI improvement applied using ${model}:\n${changed}`);
+          }
+
+          main().catch(error => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
+
+      - name: Stop if no improvement was produced
+        id: changes
+        shell: bash
+        run: |
+          if [ -f /tmp/no-change ]; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          elif [ -z "$(git status --porcelain)" ]; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install dependencies
+        if: steps.changes.outputs.has_changes == 'true'
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          elif [ -f package.json ]; then
+            npm install
+          else
+            echo "No root package.json found."
+            exit 1
+          fi
+
+      - name: Run available checks
+        if: steps.changes.outputs.has_changes == 'true'
+        run: |
+          node -e "
+            const p = require('./package.json');
+            console.log('Available npm scripts:', JSON.stringify(p.scripts || {}));
+          "
+
+          node <<'NODE'
+          const { execFileSync } = require("child_process");
+          const scripts = require("./package.json").scripts || {};
+
+          function run(script, args = []) {
+            console.log(`Running npm ${script} ${args.join(" ")}`);
+            execFileSync("npm", [script, ...args], { stdio: "inherit" });
+          }
+
+          if (scripts.typecheck) run("run", ["typecheck"]);
+          if (scripts.lint) run("run", ["lint"]);
+          if (scripts.test) {
+            if (process.env.CI) {
+              console.log("Running the project's test script in CI mode.");
+            }
+            run("test", ["--", "--run"]);
+          }
+          if (scripts.build) run("run", ["build"]);
+
+          if (!scripts.typecheck && !scripts.lint && !scripts.test && !scripts.build) {
+            console.log("Warning: no standard typecheck, lint, test, or build script was found.");
+          }
+          NODE
+        env:
+          CI: "true"
+
+      - name: Create improvement branch and commit
+        if: steps.changes.outputs.has_changes == 'true'
+        id: commit
+        env:
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          BRANCH="ai-daily-updates-${RUN_ID}"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+
+          git add -- src public
+          git diff --cached --check
+
+          if git diff --cached --quiet; then
+            echo "No eligible changes to commit."
+            exit 0
+          fi
+
+          git commit -m "chore: daily AI product catalog improvement"
+          git push origin "HEAD:refs/heads/${BRANCH}"
+
+      - name: Open pull request for review
+        if: steps.changes.outputs.has_changes == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ steps.commit.outputs.branch }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          if [ -z "$BRANCH" ]; then
+            echo "No improvement branch was created."
+            exit 0
+          fi
+
+          EXISTING_PR=$(gh pr list \
+            --repo "$REPOSITORY" \
+            --head "$BRANCH" \
+            --base main \
+            --state open \
+            --json number \
+            --jq '.[0].number // empty')
+
+          if [ -z "$EXISTING_PR" ]; then
+            gh pr create \
+              --repo "$REPOSITORY" \
+              --base main \
+              --head "$BRANCH" \
+              --title "Daily AI Product Catalog Improvement" \
+              --body "Automated, AI-assisted product catalog improvement. Please review the code and checks before merging."
+          else
+            echo "Pull request #$EXISTING_PR already exists."
+          fi
