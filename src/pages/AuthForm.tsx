@@ -49,8 +49,8 @@ export function AuthShell({
               <path d="M12 3H21V12A9 9 0 1 1 12 3Z" fill="#000" />
             </svg>
           </div>
-          <span className="hidden text-sm font-light tracking-[0.4em] text-white/70 lg:block">
-            FORME
+            <span className="font-['DM_Serif_Display',serif] text-4xl leading-none tracking-tight text-[#F8F7F4] lg:text-5xl">            
+              forme
           </span>
         </div>
       </aside>
@@ -58,7 +58,9 @@ export function AuthShell({
       {/* Form sheet */}
       <main className="relative -mt-14 flex flex-1 flex-col justify-center rounded-t-[3.5rem] bg-white px-6 py-12 sm:px-12 lg:mt-0 lg:-ml-24 lg:rounded-l-[6rem] lg:rounded-tr-none lg:px-24">
         <div className="mx-auto w-full max-w-md">
-          <h1 className="text-center text-4xl font-light tracking-tight text-black">{title}</h1>
+          <h1 className="text-center font-['DM_Serif_Display',serif] text-5xl leading-none tracking-tight text-[#20211F]">
+            {title}
+          </h1>          
           {intro && <p className="mt-3 text-center text-sm text-neutral-500">{intro}</p>}
           <div className="mt-10">{children}</div>
           {footer && <p className="mt-12 text-center text-sm text-neutral-800">{footer}</p>}
