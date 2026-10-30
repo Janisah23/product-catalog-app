@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, NavLink, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Search, ShoppingBag, X } from "lucide-react";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Logo } from "@/components/layout/Logo";
 import { useCart } from "@/hooks/use-cart";
@@ -43,24 +43,42 @@ export function Header() {
 
   const count = cart?.itemCount ?? 0;
   const linkClass = ({ isActive }: { isActive: boolean }) =>
-    `text-sm underline-offset-8 hover:underline ${isActive ? "font-medium underline" : "text-muted-foreground hover:text-foreground"}`;
+    `text-sm tracking-wide underline decoration-1 underline-offset-[10px] transition-colors ${
+      isActive
+        ? "text-foreground decoration-foreground"
+        : "text-muted-foreground decoration-transparent hover:text-foreground hover:decoration-foreground/40"
+    }`;
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur-sm">
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-8 gap-y-3 px-5 py-3 md:px-8">
+    <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur-md">
+      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-10 gap-y-4 px-5 py-4 md:px-8 md:py-5">
         <Logo />
-        <nav aria-label="Main" className="hidden items-center gap-6 sm:flex">
+        <nav aria-label="Main" className="hidden items-center gap-8 sm:flex">
           <NavLink to="/" end className={linkClass}>
             Catalog
           </NavLink>
         </nav>
 
-        <form role="search" onSubmit={submit} className="order-last relative w-full md:order-none md:ml-auto md:w-72 lg:w-96">
+        <form
+          role="search"
+          onSubmit={submit}
+          className="relative order-last w-full md:order-none md:ml-auto md:w-72 lg:w-96"
+        >
           <label htmlFor="site-search" className="sr-only">
             Search products
           </label>
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-          <Input id="site-search" type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search products" className="pr-9 pl-9 [&::-webkit-search-cancel-button]:hidden" />
+          <Search
+            className="pointer-events-none absolute top-1/2 left-4 size-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <Input
+            id="site-search"
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search products"
+            className="h-10 rounded-full border-border bg-card pr-10 pl-11 text-sm shadow-none placeholder:text-muted-foreground focus-visible:ring-1 [&::-webkit-search-cancel-button]:hidden"
+          />
           {query && (
             <button
               type="button"
@@ -74,35 +92,55 @@ export function Header() {
                   navigate({ pathname: "/", search: next.toString() });
                 }
               }}
-              className="absolute top-1/2 right-2 grid size-6 -translate-y-1/2 place-items-center rounded-sm text-muted-foreground hover:text-foreground"
+              className="absolute top-1/2 right-3 grid size-6 -translate-y-1/2 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
               <X className="size-4" />
             </button>
           )}
         </form>
 
-        <div className="ml-auto flex items-center gap-1 md:ml-0">
-          <Link to="/cart" className={buttonVariants({ variant: "ghost", size: "sm" })} aria-label={`Cart, ${count} ${count === 1 ? "item" : "items"}`}>
-            <ShoppingBag />
+        <div className="ml-auto flex items-center gap-2 md:ml-0">
+          <Link
+            to="/cart"
+            className={`${buttonVariants({ variant: "ghost", size: "sm" })} gap-2 rounded-full px-3`}
+            aria-label={`Cart, ${count} ${count === 1 ? "item" : "items"}`}
+          >
+            <ShoppingBag className="size-[18px]" />
             <span className="hidden sm:inline">Cart</span>
-            <span className="grid min-w-5 place-items-center rounded-sm bg-primary px-1 text-xs text-primary-foreground tabular-nums" data-testid="cart-count">
+            <span
+              className="grid h-5 min-w-5 place-items-center rounded-full bg-primary px-1.5 text-[11px] font-medium text-primary-foreground tabular-nums"
+              data-testid="cart-count"
+            >
               {count}
             </span>
           </Link>
+
           {status === "ready" &&
             (user ? (
               <>
-                <span className="hidden max-w-32 truncate px-2 text-sm text-muted-foreground lg:inline">{user.displayName ?? user.email}</span>
-                <Button variant="outline" size="sm" onClick={handleLogout}>
+                <span className="hidden max-w-32 truncate px-2 text-sm text-muted-foreground lg:inline">
+                  {user.displayName ?? user.email}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="rounded-full border border-border px-4 py-1.5 text-sm transition-colors hover:border-foreground"
+                >
                   Log out
-                </Button>
+                </button>
               </>
             ) : (
               <>
-                <Link to="/login" className={buttonVariants({ variant: "ghost", size: "sm" })}>
+                <Link
+                  to="/login"
+                  className={`${buttonVariants({ variant: "ghost", size: "sm" })} rounded-full px-4`}
+                >
                   Log in
                 </Link>
-                <Link to="/register" className={buttonVariants({ size: "sm" })}>
+                <Link
+                  to="/register"
+                  className={`${buttonVariants({ size: "sm" })} rounded-full px-5`}
+                >
                   Sign up
                 </Link>
               </>
