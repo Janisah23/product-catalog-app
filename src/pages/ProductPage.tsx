@@ -57,15 +57,28 @@ function ProductView({ product }: { product: Product }) {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-5 py-8 md:px-8 md:py-12">
-      <Link to="/" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+    <div className="mx-auto max-w-7xl space-y-5 px-4 pt-4 pb-16 md:px-6">
+      <Link
+        to="/"
+        className="inline-flex h-10 items-center gap-1 rounded-full bg-card px-4 text-sm text-muted-foreground shadow-sm transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+      >
         <ChevronLeft className="size-4" /> All products
       </Link>
 
-      <div className="mt-6 grid gap-10 lg:grid-cols-2 lg:gap-16">
-        <section aria-label="Product images">
-          <div className="aspect-[4/5] overflow-hidden bg-secondary">
-            <img src={product.images[active]} alt={`${product.title}, view ${active + 1} of ${product.images.length}`} className="size-full object-cover" />
+      <div className="grid gap-5 lg:grid-cols-2">
+        {/* Gallery */}
+        <section aria-label="Product images" className="rounded-3xl bg-card p-3 shadow-sm md:p-5">
+          <div className="relative aspect-[4/5] overflow-hidden rounded-3xl bg-muted">
+            <img
+              src={product.images[active]}
+              alt={`${product.title}, view ${active + 1} of ${product.images.length}`}
+              className="size-full object-cover mix-blend-multiply"
+            />
+            {product.discountPercentage > 0 && (
+              <Badge variant="sale" className="absolute top-4 right-4 rounded-full">
+                {product.discountPercentage}% off
+              </Badge>
+            )}
           </div>
           {product.images.length > 1 && (
             <ul className="mt-3 grid grid-cols-4 gap-3">
@@ -76,9 +89,12 @@ function ProductView({ product }: { product: Product }) {
                     onClick={() => setActive(i)}
                     aria-label={`Show image ${i + 1}`}
                     aria-pressed={i === active}
-                    className={cn("block aspect-[4/5] w-full overflow-hidden border bg-secondary", i === active ? "border-primary" : "border-border opacity-80 hover:opacity-100")}
+                    className={cn(
+                      "block aspect-square w-full overflow-hidden rounded-2xl bg-muted ring-2 transition focus-visible:outline-none focus-visible:ring-primary",
+                      i === active ? "ring-primary" : "ring-transparent opacity-70 hover:opacity-100",
+                    )}
                   >
-                    <img src={src} alt="" className="size-full object-cover" />
+                    <img src={src} alt="" className="size-full object-cover mix-blend-multiply" />
                   </button>
                 </li>
               ))}
@@ -86,26 +102,28 @@ function ProductView({ product }: { product: Product }) {
           )}
         </section>
 
-        <section className="lg:pt-2">
-          <p className="text-sm text-muted-foreground">
-            <Link to={`/?category=${product.category}`} className="underline-offset-4 hover:underline">
+        {/* Info */}
+        <section className="rounded-3xl bg-card p-6 shadow-sm md:p-10">
+          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            <Link
+              to={`/?category=${product.category}`}
+              className="rounded-full bg-muted px-3 py-1 text-xs text-foreground transition-colors hover:bg-muted/70"
+            >
               {product.categoryName}
             </Link>
-            {" by "}
-            {product.brand}
-          </p>
-          <h1 className="mt-2 font-serif text-4xl leading-tight md:text-5xl">{product.title}</h1>
+            <span>by {product.brand}</span>
+          </div>
+          <h1 className="mt-4 text-3xl leading-tight font-semibold tracking-tight md:text-4xl">{product.title}</h1>
           <div className="mt-4">
             <Stars rating={product.rating} />
           </div>
 
           <div className="mt-6 flex flex-wrap items-center gap-3">
             <Price price={product.price} originalPrice={product.originalPrice} size="lg" />
-            {product.discountPercentage > 0 && <Badge variant="sale">{product.discountPercentage}% off</Badge>}
           </div>
 
           <p className="mt-3 flex items-center gap-2 text-sm" data-testid="stock-status">
-            <span className={cn("size-2 rounded-full", soldOut ? "bg-sale" : low ? "bg-sale" : "bg-primary")} aria-hidden="true" />
+            <span className={cn("size-2 rounded-full", soldOut || low ? "bg-sale" : "bg-primary")} aria-hidden="true" />
             {soldOut ? "Out of stock" : low ? `Only ${product.stock} left in stock` : "In stock"}
           </p>
 
@@ -113,22 +131,22 @@ function ProductView({ product }: { product: Product }) {
 
           <div className="mt-8 flex flex-wrap items-center gap-3">
             {!soldOut && <QuantityStepper value={quantity} max={maxQty} onChange={setQuantity} label={product.title} disabled={add.isPending} />}
-            <Button size="lg" className="min-w-48 flex-1 sm:flex-none" onClick={addToCart} disabled={soldOut || add.isPending}>
+            <Button size="lg" className="min-w-48 flex-1 rounded-full sm:flex-none" onClick={addToCart} disabled={soldOut || add.isPending}>
               {soldOut ? "Sold out" : add.isPending ? "Adding…" : user ? "Add to cart" : "Log in to add to cart"}
             </Button>
           </div>
           {add.isSuccess && (
             <p className="mt-3 text-sm">
-              <Link to="/cart" className="underline underline-offset-4">
-                View your cart
+              <Link to="/cart" className="border-b border-foreground/30 pb-0.5 font-medium hover:border-foreground">
+                View your cart →
               </Link>
             </p>
           )}
 
-          <h2 className="mt-12 mb-2 font-serif text-2xl">Details</h2>
-          <dl className="border-t border-border text-sm">
+          <h2 className="mt-10 mb-3 text-lg font-medium tracking-tight">Details</h2>
+          <dl className="divide-y divide-border overflow-hidden rounded-2xl bg-muted px-5 text-sm">
             {[{ label: "Brand", value: product.brand }, { label: "Category", value: product.categoryName }, ...product.specs].map((row) => (
-              <div key={row.label} className="grid grid-cols-[8rem_1fr] gap-4 border-b border-border py-3">
+              <div key={row.label} className="grid grid-cols-[8rem_1fr] gap-4 py-3">
                 <dt className="text-muted-foreground">{row.label}</dt>
                 <dd>{row.value}</dd>
               </div>
@@ -142,15 +160,15 @@ function ProductView({ product }: { product: Product }) {
 
 function ProductSkeleton() {
   return (
-    <div className="mx-auto grid max-w-7xl gap-10 px-5 py-12 md:px-8 lg:grid-cols-2 lg:gap-16" aria-busy="true">
-      <Skeleton className="aspect-[4/5]" />
-      <div className="space-y-4">
+    <div className="mx-auto grid max-w-7xl gap-5 px-4 pt-4 md:px-6 lg:grid-cols-2" aria-busy="true">
+      <Skeleton className="aspect-[4/5] rounded-3xl" />
+      <div className="space-y-4 rounded-3xl bg-card p-10">
         <Skeleton className="h-4 w-1/3" />
         <Skeleton className="h-12 w-3/4" />
         <Skeleton className="h-5 w-1/4" />
         <Skeleton className="h-8 w-1/3" />
         <Skeleton className="h-24 w-full" />
-        <Skeleton className="h-12 w-1/2" />
+        <Skeleton className="h-12 w-1/2 rounded-full" />
       </div>
     </div>
   );
