@@ -25,7 +25,6 @@ const queryClient = new QueryClient({
   },
 });
 
-/** Mirrors Firebase's signed-in user into the Zustand store and clears cached cart data on logout. */
 function AuthBootstrap() {
   const setUser = useAuthStore((s) => s.setUser);
   useEffect(

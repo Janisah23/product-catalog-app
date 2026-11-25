@@ -10,8 +10,17 @@ import { categoriesRouter, productsRouter } from './routes/products.js';
 export function createApp() {
   const app = express();
   app.disable('x-powered-by');
-  app.use(helmet());
   app.use(
+      helmet({
+        contentSecurityPolicy: {
+          directives: {
+            ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+            'img-src': ["'self'", 'data:', 'https:'],
+          },
+        },
+      }),
+    );  
+    app.use(
     cors({
       origin: config.CLIENT_ORIGIN.split(',').map((o) => o.trim()),
       methods: ['GET', 'POST', 'PATCH', 'DELETE'],

@@ -66,7 +66,7 @@ productsRouter.get('/', async (req, res) => {
 
 // GET /api/products/:id
 productsRouter.get('/:id', async (req, res) => {
-  const id = z.string().regex(/^[a-z0-9-]{1,80}$/, 'Invalid product id').parse(req.params.id);
+  const id = z.string().regex(/^[A-Za-z0-9_-]{1,80}$/, 'Invalid product id').parse(req.params.id);
   const doc = await productsCol.doc(id).get();
   if (!doc.exists) throw notFound('Product not found');
   res.json({ data: toProduct(doc) });

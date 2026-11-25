@@ -1,10 +1,22 @@
+import type { CollectionReference } from 'firebase-admin/firestore';
 import { categoriesCol, db, productsCol } from '../firebase.js';
 import { buildKeywords } from '../lib/search.js';
 import { CATEGORIES, PRODUCTS } from './products.js';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+async function clearCollection(col: CollectionReference) {
+  const snap = await col.get();
+  if (snap.empty) return;
+  const batch = db.batch();
+  snap.docs.forEach((doc) => batch.delete(doc.ref));
+  await batch.commit();
+}
+
 async function seed() {
+  await clearCollection(productsCol);
+  await clearCollection(categoriesCol);
+
   const names = new Map<string, string>(CATEGORIES.map((c) => [c.slug, c.name]));
   const batch = db.batch();
 
@@ -12,7 +24,6 @@ async function seed() {
     const categoryName = names.get(p.category);
     if (!categoryName) throw new Error(`Unknown category "${p.category}" on ${p.id}`);
 
-    // For sale items the listed price is the sale price; derive the original from the discount.
     const originalPrice = p.discount ? round2(p.price / (1 - p.discount / 100)) : null;
     const images = [1, 2, 3].map((n) => `/products/${p.id}-${n}.svg`);
 
@@ -36,7 +47,10 @@ async function seed() {
   });
 
   for (const c of CATEGORIES) {
-    batch.set(categoriesCol.doc(c.slug), { name: c.name, count: PRODUCTS.filter((p) => p.category === c.slug).length });
+    batch.set(categoriesCol.doc(c.slug), {
+      name: c.name,
+      count: PRODUCTS.filter((p) => p.category === c.slug).length,
+    });
   }
 
   await batch.commit();
