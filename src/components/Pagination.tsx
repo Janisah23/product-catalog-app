@@ -12,7 +12,7 @@ export function Pagination({ page, totalPages, onChange }: { page: number; total
   const items = useMemo(() => pageList(page, totalPages), [page, totalPages]);
   if (totalPages <= 1) return null;
   return (
-    <nav aria-label="Pagination" className="mt-12 flex items-center justify-center gap-1">
+    <nav aria-label="Pagination" className="mx-auto mt-12 flex w-fit max-w-full items-center justify-center gap-1 rounded-full border border-border bg-card p-1.5">
       <Button variant="ghost" size="sm" disabled={page <= 1} onClick={() => onChange(page - 1)}>
         <ChevronLeft /> Previous
       </Button>

@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useLocation, useNavigate } from "react-router-dom";
 import { api, errorMessage } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
 import { toast } from "@/stores/toast-store";
@@ -50,4 +51,27 @@ export function useCartMutations() {
   });
 
   return { add, setQuantity, remove };
+}
+
+/** Add-to-cart and buy-now for any product button. Logged-out shoppers are sent to log in and then returned to this page. */
+export function useAddToCart() {
+  const user = useAuthStore((s) => s.user);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { add } = useCartMutations();
+
+  const requireLogin = () => navigate("/login", { state: { from: location } });
+
+  return {
+    isPending: add.isPending,
+    isSuccess: add.isSuccess,
+    addToCart(productId: string, quantity = 1) {
+      if (!user) return requireLogin();
+      add.mutate({ productId, quantity });
+    },
+    buyNow(productId: string, quantity = 1) {
+      if (!user) return requireLogin();
+      add.mutate({ productId, quantity }, { onSuccess: () => navigate("/cart") });
+    },
+  };
 }

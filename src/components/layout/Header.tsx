@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Link, NavLink, useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { Search, ShoppingBag, X } from "lucide-react";
+import { Heart, Search, ShoppingBag, X } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Logo } from "@/components/layout/Logo";
@@ -8,6 +8,7 @@ import { useCart } from "@/hooks/use-cart";
 import { logOut } from "@/lib/auth-actions";
 import { useAuthStore } from "@/stores/auth-store";
 import { toast } from "@/stores/toast-store";
+import { useWishlist } from "@/stores/wishlist-store";
 
 export function Header() {
   const { user, status } = useAuthStore();
@@ -18,8 +19,13 @@ export function Header() {
   const urlSearch = params.get("search") ?? "";
   const [query, setQuery] = useState(urlSearch);
 
+  // The catalog and category pages share one search box. Searching on a category page stays in that category.
+  const inCategory = pathname.startsWith("/catalog/");
+  const onCatalog = pathname === "/" || inCategory;
+  const wishlistCount = useWishlist((s) => s.ids.length);
+
   // Keep the box in step with the URL on the catalog, and empty it elsewhere.
-  const syncKey = pathname === "/" ? urlSearch : "";
+  const syncKey = onCatalog ? urlSearch : "";
   const [prevKey, setPrevKey] = useState(syncKey);
   if (prevKey !== syncKey) {
     setPrevKey(syncKey);
@@ -29,10 +35,8 @@ export function Header() {
   function submit(e: FormEvent) {
     e.preventDefault();
     const next = new URLSearchParams();
-    const category = pathname === "/" ? params.get("category") : null;
-    if (category) next.set("category", category);
     if (query.trim()) next.set("search", query.trim());
-    navigate({ pathname: "/", search: next.toString() });
+    navigate({ pathname: inCategory ? pathname : "/", search: next.toString() });
   }
 
   async function handleLogout() {
@@ -54,7 +58,7 @@ export function Header() {
       <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-10 gap-y-4 px-5 py-4 md:px-8 md:py-5">
         <Logo />
         <nav aria-label="Main" className="hidden items-center gap-8 sm:flex">
-          <NavLink to="/" end className={linkClass}>
+          <NavLink to="/" className={() => linkClass({ isActive: onCatalog })}>
             Catalog
           </NavLink>
         </nav>
@@ -89,7 +93,7 @@ export function Header() {
                   const next = new URLSearchParams(params);
                   next.delete("search");
                   next.delete("page");
-                  navigate({ pathname: "/", search: next.toString() });
+                  navigate({ pathname: onCatalog ? pathname : "/", search: next.toString() });
                 }
               }}
               className="absolute top-1/2 right-3 grid size-6 -translate-y-1/2 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
@@ -100,6 +104,16 @@ export function Header() {
         </form>
 
         <div className="ml-auto flex items-center gap-2 md:ml-0">
+          <Link
+            to="/wishlist"
+            className={`${buttonVariants({ variant: "ghost", size: "sm" })} relative gap-2 rounded-full px-3`}
+            aria-label={`Wishlist, ${wishlistCount} ${wishlistCount === 1 ? "item" : "items"}`}
+          >
+            <Heart className="size-[18px]" />
+            {wishlistCount > 0 && (
+              <span className="grid h-5 min-w-5 place-items-center rounded-full bg-sale px-1.5 text-[11px] font-medium text-sale-foreground tabular-nums">{wishlistCount}</span>
+            )}
+          </Link>
           <Link
             to="/cart"
             className={`${buttonVariants({ variant: "ghost", size: "sm" })} gap-2 rounded-full px-3`}

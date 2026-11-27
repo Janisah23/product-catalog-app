@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { onAuthStateChanged } from "firebase/auth";
 import { Layout } from "@/components/layout/Layout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -10,10 +10,12 @@ import { auth, isFirebaseConfigured } from "@/lib/firebase";
 import { useAuthStore } from "@/stores/auth-store";
 import CartPage from "@/pages/CartPage";
 import CatalogPage from "@/pages/CatalogPage";
+import CategoryPage from "@/pages/CategoryPage";
 import LoginPage from "@/pages/LoginPage";
 import NotFoundPage from "@/pages/NotFoundPage";
 import ProductPage from "@/pages/ProductPage";
 import RegisterPage from "@/pages/RegisterPage";
+import WishlistPage from "@/pages/WishlistPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -67,7 +69,10 @@ export default function App() {
 
           <Route element={<Layout />}>
             <Route index element={<CatalogPage />} />
+            <Route path="catalog" element={<Navigate to="/" replace />} />
+            <Route path="catalog/:category" element={<CategoryPage />} />
             <Route path="product/:id" element={<ProductPage />} />
+            <Route path="wishlist" element={<WishlistPage />} />
             <Route element={<ProtectedRoute />}>
               <Route path="cart" element={<CartPage />} />
             </Route>

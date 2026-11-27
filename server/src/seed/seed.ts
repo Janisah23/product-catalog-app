@@ -1,6 +1,7 @@
 import type { CollectionReference } from 'firebase-admin/firestore';
 import { categoriesCol, db, productsCol } from '../firebase.js';
 import { buildKeywords } from '../lib/search.js';
+import { photosFor } from './photos.js';
 import { CATEGORIES, PRODUCTS } from './products.js';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -14,6 +15,12 @@ async function clearCollection(col: CollectionReference) {
 }
 
 async function seed() {
+  // Real photos come from photos.ts. A product without any still gets its generated illustration, and is reported below.
+  const withoutPhotos = PRODUCTS.filter((p) => photosFor(p.id).length === 0).map((p) => p.id);
+  if (withoutPhotos.length && process.argv.includes('--strict')) {
+    throw new Error(`--strict: ${withoutPhotos.length} product(s) have no photos in server/src/seed/photos.ts:\n  ${withoutPhotos.join('\n  ')}`);
+  }
+
   await clearCollection(productsCol);
   await clearCollection(categoriesCol);
 
@@ -25,7 +32,8 @@ async function seed() {
     if (!categoryName) throw new Error(`Unknown category "${p.category}" on ${p.id}`);
 
     const originalPrice = p.discount ? round2(p.price / (1 - p.discount / 100)) : null;
-    const images = [1, 2, 3].map((n) => `/products/${p.id}-${n}.svg`);
+    const photos = photosFor(p.id);
+    const images = photos?.length ? photos : [1, 2, 3].map((n) => `/products/${p.id}-${n}.svg`);
 
     batch.set(productsCol.doc(p.id), {
       title: p.title,
@@ -55,6 +63,9 @@ async function seed() {
 
   await batch.commit();
   console.log(`Seeded ${PRODUCTS.length} products in ${CATEGORIES.length} categories.`);
+  if (withoutPhotos.length) {
+    console.warn(`\n${withoutPhotos.length} of ${PRODUCTS.length} products are still using generated illustrations instead of photographs:\n  ${withoutPhotos.join('\n  ')}\nAdd their photos to server/src/seed/photos.ts and run the seed again.`);
+  }
 }
 
 seed().catch((err) => {

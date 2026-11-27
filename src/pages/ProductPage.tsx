@@ -1,20 +1,21 @@
-import { useState } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { ChevronDown, ChevronLeft, ChevronRight, Star } from "lucide-react";
+import { useMemo } from "react";
+import { Link, useParams } from "react-router-dom";
+import { Breadcrumb } from "@/components/Breadcrumb";
+import { Disclosure } from "@/components/Disclosure";
+import { Price } from "@/components/Price";
+import { ProductActions } from "@/components/ProductActions";
+import { ProductGallery } from "@/components/ProductGallery";
+import { ProductGrid } from "@/components/ProductGrid";
+import { StateMessage } from "@/components/StateMessage";
+import { Stars } from "@/components/Stars";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Price } from "@/components/Price";
-import { ProductCard } from "@/components/ProductCard";
-import { QuantityStepper } from "@/components/QuantityStepper";
-import { StateMessage } from "@/components/StateMessage";
-import { useCartMutations } from "@/hooks/use-cart";
-import { useProduct, useProducts } from "@/hooks/use-catalog";
+import { useAllProducts, useProduct } from "@/hooks/use-catalog";
 import { usePageTitle } from "@/hooks/use-page-title";
 import { ApiError, errorMessage } from "@/lib/api";
-import { useAuthStore } from "@/stores/auth-store";
-import { MAX_LINE_QTY, type Product } from "@/types";
-import { cn } from "cn";
+import { categoryPath } from "@/lib/categories";
+import type { Product } from "@/types";
 
 export default function ProductPage() {
   const { id } = useParams();
@@ -37,179 +38,81 @@ export default function ProductPage() {
 }
 
 function ProductView({ product }: { product: Product }) {
-  const [active, setActive] = useState(0);
-  const [quantity, setQuantity] = useState(1);
-  const user = useAuthStore((s) => s.user);
-  const navigate = useNavigate();
-  const location = useLocation();
-  const { add } = useCartMutations();
-  const { data: related } = useProducts({ search: undefined, category: product.category, sort: "rating_desc", page: 1 });
-  const more = related?.data.filter((p) => p.id !== product.id).slice(0, 4) ?? [];
+  const { data } = useAllProducts();
+  const related = useMemo(() => {
+    const others = (data?.data ?? []).filter((p) => p.id !== product.id);
+    const same = others.filter((p) => p.category === product.category);
+    return [...same, ...others.filter((p) => p.category !== product.category)].slice(0, 4);
+  }, [data, product.id, product.category]);
 
-  const soldOut = product.stock === 0;
-  const maxQty = Math.min(product.stock, MAX_LINE_QTY);
-  const low = product.stock > 0 && product.stock <= 5;
-  const count = product.images.length;
-  const step = (dir: 1 | -1) => setActive((i) => (i + dir + count) % count);
-
-  function addToCart() {
-    if (!user) {
-      navigate("/login", { state: { from: location } });
-      return;
-    }
-    add.mutate({ productId: product.id, quantity });
-  }
+  const images = product.images.length ? product.images : product.thumbnail ? [product.thumbnail] : [];
+  const rows = [{ label: "Brand", value: product.brand }, { label: "Category", value: product.categoryName }, ...product.specs];
 
   return (
-    <div className="mx-auto max-w-7xl pb-16 lg:px-6 lg:pt-4">
-      {/* Breadcrumb (desktop) */}
-      <nav aria-label="Breadcrumb" className="mb-5 hidden items-center gap-2 text-xs text-muted-foreground lg:flex">
-        <Link to="/" className="hover:text-foreground">Home</Link>
-        <span aria-hidden="true">/</span>
-        <Link to={`/?category=${product.category}`} className="hover:text-foreground">{product.categoryName}</Link>
-        <span aria-hidden="true">/</span>
-        <span className="text-foreground">{product.title}</span>
-      </nav>
+    <div className="mx-auto max-w-7xl px-5 pt-6 pb-16 md:px-8">
+      <Breadcrumb items={[{ label: "Catalog", to: "/" }, { label: product.categoryName, to: categoryPath(product.category) }, { label: product.title }]} />
 
-      <div className="lg:grid lg:grid-cols-2 lg:items-start lg:gap-10">
-        {/* Gallery */}
-        <section aria-label="Product images" className="relative bg-gradient-to-b from-muted to-background px-4 pt-4 pb-10 lg:rounded-3xl lg:bg-none lg:p-0 lg:pb-0">
+      <div className="mt-6 grid gap-8 lg:grid-cols-[1.1fr_1fr] lg:items-start lg:gap-14">
+        <ProductGallery images={images} title={product.title} />
+
+        <section className="min-w-0 lg:sticky lg:top-24">
           <Link
-            to="/"
-            aria-label="Back to all products"
-            className="absolute top-4 left-4 z-10 grid size-10 place-items-center rounded-full bg-card shadow-sm focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none lg:hidden"
+            to={categoryPath(product.category)}
+            className="inline-flex h-8 items-center rounded-full border border-border bg-card px-3.5 text-xs transition-colors hover:border-foreground/40"
           >
-            <ChevronLeft className="size-5" />
+            {product.categoryName}
           </Link>
+          <h1 className="mt-4 font-serif text-4xl leading-tight md:text-5xl">{product.title}</h1>
+          <p className="mt-2 text-sm text-muted-foreground">by {product.brand}</p>
 
-          <div className="mx-auto aspect-[4/5] max-h-[26rem] overflow-hidden rounded-3xl bg-muted lg:max-h-none">
-            <img src={product.images[active]} alt={`${product.title}, view ${active + 1} of ${count}`} className="size-full object-cover" />
+          <div className="mt-4">
+            <Stars rating={product.rating} />
           </div>
 
-          {count > 1 && (
-            <>
-              <div className="mt-4 flex justify-center sm:hidden">
-                <div className="flex items-center gap-1 rounded-full bg-card p-1 shadow-sm">
-                  <button type="button" onClick={() => step(-1)} aria-label="Previous image" className="grid size-8 place-items-center rounded-full hover:bg-muted">
-                    <ChevronLeft className="size-4" />
-                  </button>
-                  <span className="px-1 text-xs tabular-nums text-muted-foreground" aria-live="polite">
-                    {active + 1} / {count}
-                  </span>
-                  <button type="button" onClick={() => step(1)} aria-label="Next image" className="grid size-8 place-items-center rounded-full hover:bg-muted">
-                    <ChevronRight className="size-4" />
-                  </button>
-                </div>
-              </div>
-              <ul className="mt-4 hidden grid-cols-3 gap-3 sm:grid">
-                {product.images.map((src, i) => (
-                  <li key={src}>
-                    <button
-                      type="button"
-                      onClick={() => setActive(i)}
-                      aria-label={`Show image ${i + 1}`}
-                      aria-pressed={i === active}
-                      className={cn(
-                        "block aspect-[4/5] w-full overflow-hidden rounded-2xl bg-muted ring-2 transition focus-visible:outline-none focus-visible:ring-primary",
-                        i === active ? "ring-primary" : "opacity-70 ring-transparent hover:opacity-100",
-                      )}
-                    >
-                      <img src={src} alt="" className="size-full object-cover" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </section>
-
-        {/* Info sheet */}
-        <section className="relative -mt-6 rounded-t-3xl bg-card p-5 shadow-sm sm:p-8 lg:mt-0 lg:rounded-3xl lg:p-10">
-          <div className="flex items-start justify-between gap-4">
-            <h1 className="text-2xl leading-tight font-semibold tracking-tight md:text-4xl">{product.title}</h1>
-            <span className="flex shrink-0 items-center gap-1.5 rounded-xl bg-muted px-3 py-1.5 text-sm font-medium">
-              <Star className="size-4 fill-amber-400 text-amber-400" aria-hidden="true" />
-              <span className="sr-only">Rating</span>
-              {product.rating.toFixed(1)}
-            </span>
-          </div>
-
-          <p className="mt-2 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
-            <Link to={`/?category=${product.category}`} className="hover:text-foreground">
-              {product.categoryName}
-            </Link>
-            <span aria-hidden="true">•</span>
-            <span>{product.brand}</span>
-          </p>
-
-          <div className="mt-5 flex flex-wrap items-center gap-3">
+          <div className="mt-6 flex flex-wrap items-center gap-3">
             <Price price={product.price} originalPrice={product.originalPrice} size="lg" />
-            {product.discountPercentage > 0 && (
-              <Badge variant="sale" className="rounded-full px-3">
-                Save {product.discountPercentage}%
-              </Badge>
-            )}
+            {product.discountPercentage > 0 && <Badge variant="sale" className="h-7 px-3">Save {product.discountPercentage}%</Badge>}
           </div>
 
-          <p className="mt-5 max-w-prose text-sm leading-relaxed text-muted-foreground md:text-base">{product.description}</p>
-
-          <div className="mt-6 flex items-center justify-between gap-4 border-t border-border pt-6">
-            <div>
-              <p className="font-medium">Quantity</p>
-              <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground" data-testid="stock-status">
-                <span className={cn("size-2 rounded-full", soldOut || low ? "bg-sale" : "bg-primary")} aria-hidden="true" />
-                {soldOut ? "Out of stock" : low ? `Only ${product.stock} left` : "In stock, ready to ship"}
-              </p>
-            </div>
-            {!soldOut && <QuantityStepper value={quantity} max={maxQty} onChange={setQuantity} label={product.title} disabled={add.isPending} />}
+          <div className="mt-7">
+            <ProductActions product={product} />
           </div>
 
-          <Button size="lg" className="mt-6 h-14 w-full rounded-full text-base" onClick={addToCart} disabled={soldOut || add.isPending}>
-            {soldOut ? "Sold out" : add.isPending ? "Adding…" : user ? "Add to cart" : "Log in to add to cart"}
-          </Button>
-          {add.isSuccess && (
-            <p className="mt-3 text-center text-sm">
-              <Link to="/cart" className="border-b border-foreground/30 pb-0.5 font-medium hover:border-foreground">
-                View your cart →
-              </Link>
-            </p>
-          )}
-
-          <details open className="group mt-8 rounded-2xl bg-muted px-5 py-4">
-            <summary className="flex cursor-pointer list-none items-center justify-between font-medium [&::-webkit-details-marker]:hidden">
-              Details
-              <ChevronDown className="size-4 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden="true" />
-            </summary>
-            <dl className="mt-3 divide-y divide-border/70 text-sm">
-              {[{ label: "Brand", value: product.brand }, { label: "Category", value: product.categoryName }, ...product.specs].map((row) => (
-                <div key={row.label} className="grid grid-cols-[7rem_1fr] gap-4 py-3">
-                  <dt className="text-muted-foreground">{row.label}</dt>
-                  <dd>{row.value}</dd>
-                </div>
-              ))}
-            </dl>
-          </details>
+          <div className="mt-8 space-y-3">
+            <Disclosure title="Description" defaultOpen>
+              <p className="leading-relaxed text-muted-foreground">{product.description}</p>
+            </Disclosure>
+            <Disclosure title="Specifications" defaultOpen>
+              <dl className="divide-y divide-border">
+                {rows.map((row) => (
+                  <div key={row.label} className="grid grid-cols-[8rem_1fr] gap-4 py-3 first:pt-0 last:pb-0">
+                    <dt className="text-muted-foreground">{row.label}</dt>
+                    <dd>{row.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </Disclosure>
+          </div>
         </section>
       </div>
 
-      {/* More products */}
-      {more.length > 0 && (
-        <section aria-labelledby="more-heading" className="mt-12 px-4 lg:px-0">
-          <div className="mb-5 flex items-center justify-between">
-            <h2 id="more-heading" className="text-xl font-semibold tracking-tight">
-              More products
-            </h2>
-            <Link to={`/?category=${product.category}`} className="border-b border-foreground/30 pb-0.5 text-xs font-medium hover:border-foreground">
-              View all →
-            </Link>
-          </div>
-          <ul className="grid grid-cols-2 gap-x-3 gap-y-8 md:gap-x-5 lg:grid-cols-4">
-            {more.map((p) => (
-              <li key={p.id}>
-                <ProductCard product={p} />
-              </li>
-            ))}
-          </ul>
+      <section aria-label="Rating" className="mt-16 grid gap-6 rounded-3xl bg-secondary p-8 md:grid-cols-[auto_1fr] md:items-center md:gap-16 md:p-12">
+        <p className="flex items-end gap-2">
+          <span className="font-serif text-7xl leading-none md:text-8xl">{product.rating.toFixed(1)}</span>
+          <span className="pb-2 text-muted-foreground">/ 5</span>
+        </p>
+        <div>
+          <Stars rating={product.rating} />
+          <p className="mt-2 text-sm text-muted-foreground">Average rating for the {product.title}.</p>
+        </div>
+      </section>
+
+      {related.length > 0 && (
+        <section aria-labelledby="related-heading" className="mt-20">
+          <h2 id="related-heading" className="mb-8 text-center font-serif text-4xl md:text-5xl">
+            You might also like
+          </h2>
+          <ProductGrid products={related} variant="minimal" columns={4} />
         </section>
       )}
     </div>
@@ -218,16 +121,18 @@ function ProductView({ product }: { product: Product }) {
 
 function ProductSkeleton() {
   return (
-    <div className="mx-auto max-w-7xl lg:grid lg:grid-cols-2 lg:gap-10 lg:px-6 lg:pt-4" aria-busy="true">
-      <div className="px-4 pt-4 pb-10 lg:p-0">
-        <Skeleton className="mx-auto aspect-[4/5] max-h-[26rem] rounded-3xl lg:max-h-none" />
-      </div>
-      <div className="-mt-6 space-y-4 rounded-t-3xl bg-card p-5 lg:mt-0 lg:rounded-3xl lg:p-10">
-        <Skeleton className="h-9 w-3/4" />
-        <Skeleton className="h-4 w-1/3" />
-        <Skeleton className="h-9 w-1/3" />
-        <Skeleton className="h-24 w-full" />
-        <Skeleton className="h-14 w-full rounded-full" />
+    <div className="mx-auto max-w-7xl px-5 pt-6 md:px-8" aria-busy="true">
+      <Skeleton className="h-9 w-64" />
+      <div className="mt-6 grid gap-8 lg:grid-cols-[1.1fr_1fr] lg:gap-14">
+        <Skeleton className="aspect-[4/5] rounded-2xl" />
+        <div className="space-y-4">
+          <Skeleton className="h-8 w-28 rounded-full" />
+          <Skeleton className="h-14 w-3/4" />
+          <Skeleton className="h-5 w-1/4" />
+          <Skeleton className="h-9 w-1/3" />
+          <Skeleton className="h-14 w-full rounded-full" />
+          <Skeleton className="h-32 w-full" />
+        </div>
       </div>
     </div>
   );

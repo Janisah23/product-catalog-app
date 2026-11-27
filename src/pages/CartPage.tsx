@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Price } from "@/components/Price";
+import { ProductImage } from "@/components/ProductImage";
 import { QuantityStepper } from "@/components/QuantityStepper";
 import { StateMessage } from "@/components/StateMessage";
 import { useCart, useCartMutations } from "@/hooks/use-cart";
@@ -57,8 +58,8 @@ export default function CartPage() {
                   <TableRow key={line.productId}>
                     <TableCell>
                       <div className="flex min-w-48 items-center gap-4">
-                        <Link to={`/product/${line.productId}`} className="block w-16 shrink-0 overflow-hidden bg-secondary">
-                          <img src={line.product.thumbnail} alt="" className="aspect-[4/5] size-full object-cover" />
+                        <Link to={`/product/${line.productId}`} aria-hidden="true" tabIndex={-1} className="relative block aspect-square w-20 shrink-0 overflow-hidden rounded-xl bg-muted">
+                          <ProductImage src={line.product.thumbnail} alt={line.product.title} />
                         </Link>
                         <div>
                           <Link to={`/product/${line.productId}`} className="font-medium underline-offset-4 hover:underline">
